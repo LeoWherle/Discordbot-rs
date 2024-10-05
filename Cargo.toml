@@ -11,3 +11,34 @@ dotenv = "0.15"   # For managing environment variables (optional, for your token
 mcping = "0.2.0"
 poise = "0.6.1"
 env_logger = "0.11.5"
+
+[profile.release]
+# Enable optimizations for the release build.
+opt-level = 3
+
+# Enable lto (Link Time Optimization) for better optimizations across crates.
+lto = true
+
+# Enable code optimizations that may improve binary size and runtime.
+codegen-units = 1
+
+# Strip debug symbols and other unnecessary information to reduce binary size.
+strip = "symbols"
+
+# Optionally set the panic behavior for release builds.
+panic = "abort"
+
+# Optimize for smaller binaries if you want to target environments where size matters.
+# size = "small"
+
+# Optional: Set the debug level for the release build.
+debug = false
+
+# Optional: Disable unnecessary features that may not be needed in the release build.
+# If you have features that can be disabled in release, do so for better performance.
+# [features]
+# default = []
+
+# Optional: Use RUSTFLAGS for additional optimizations.
+# You can also set environment variables to customize build flags.
+# For example: RUSTFLAGS = "-C target-cpu=native"
