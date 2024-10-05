@@ -8,31 +8,6 @@ pub async fn server_status(ctx: Context<'_>) -> Result<(), Error> {
     // Acknowledge the interaction immediately
     ctx.defer().await?;
 
-    // Call the mcping to get the server status
-    // match get_status(&server_address, std::time::Duration::from_secs(5)) {
-    //     Ok((latency, status)) => {
-    //         // Create a response message
-    //         let response = format!(
-    //             "Server is online!\n\
-    //             **Version:** {}\n\
-    //             **Description:** {}\n\
-    //             **Players:** {}/{}\n\
-    //             **Latency:** {} ms",
-    //             status.version.name,
-    //             status.description.text(),
-    //             status.players.online,
-    //             status.players.max,
-    //             latency
-    //         );
-    //         ctx.say(response).await?;
-    //     }
-    //     Err(err) => {
-    //         // Handle the error and respond accordingly
-    //         ctx.say(format!("Failed to retrieve server status: {:?}", err))
-    //             .await?;
-    //     }
-    // }
-
     match get_minecraft_server_status(Duration::from_millis(2500)).await {
         Some(response) => {
             ctx.say(response).await?;
