@@ -1,103 +1,112 @@
+#![warn(clippy::str_to_string)]
+
+mod commands;
+
+use ::serenity::all::ActivityData;
 use dotenv::dotenv;
-use mcping::get_status;
-use serenity::all::ActivityData;
-use serenity::async_trait;
-use serenity::model::channel::Message;
-use serenity::model::gateway::{GatewayIntents, Ready};
-use serenity::prelude::*;
-use std::env;
-use std::time::Duration;
+use poise::serenity_prelude as serenity;
+use std::{collections::HashMap, env, sync::Mutex, time::Duration};
 
-const UPDATE_TIME_SEC: u64 = 60;
+use commands::get_minecraft_server_status;
 
-struct Handler;
+// Types used by all command functions
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, _: Ready) {
-        println!("Bot is connected!");
+// Custom user data passed to all command functions
+pub struct Data {
+    votes: Mutex<HashMap<String, u32>>,
+}
 
-        // Update the bot's activity with Minecraft server status
-        update_status(ctx).await;
-    }
-
-    async fn message(&self, ctx: Context, msg: Message) {
-        // Respond to the "!status" command
-        if msg.content == "!status" {
-            let server_status = get_minecraft_server_status().await;
-
-            let content = match server_status {
-                Some(status) => status,
-                None => "Failed to retrieve server status.".to_string(),
-            };
-
-            if let Err(why) = msg.channel_id.say(&ctx.http, content).await {
-                println!("Error sending message: {:?}", why);
+async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            println!("Error in command `{}`: {:?}", ctx.command().name, error);
+        }
+        error => {
+            if let Err(e) = poise::builtins::on_error(error).await {
+                println!("Error while handling error: {}", e);
             }
         }
     }
 }
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok(); // Load .env if exists
-
-    // Get the bot token from environment variables
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-
-    // Add intents
-    let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
-
-    // Create the serenity client
-    let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
-        .await
-        .expect("Error creating client");
-
-    // Start the client
-    if let Err(why) = client.start().await {
-        println!("Client error: {:?}", why);
-    }
-}
-
-// Function to update bot's activity
-async fn update_status(ctx: Context) {
+async fn update_bot_status(ctx: &serenity::Context) {
     loop {
-        // Query Minecraft server status every 60 seconds
-        if let Some(status) = get_minecraft_server_status().await {
-            let activity: ActivityData = ActivityData {
-                name: status,
+        let status_message = get_minecraft_server_status(Duration::from_secs(10)).await;
+
+        let activity = if let Some(players_status) = status_message {
+            let activity_data = ActivityData {
+                name: players_status,
                 kind: serenity::model::gateway::ActivityType::Playing,
                 url: None,
                 state: None,
             };
-            ctx.set_activity(Some(activity));
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(UPDATE_TIME_SEC)).await;
+            Some(activity_data)
+        } else {
+            None
+        };
+        ctx.set_activity(activity);
+        tokio::time::sleep(Duration::from_secs(30)).await;
     }
 }
 
-// Function to query the Minecraft server using mcping
-use tokio::task;
+#[tokio::main]
+async fn main() {
+    // Initialize logging
+    dotenv().ok();
+    env_logger::init();
 
-async fn get_minecraft_server_status() -> Option<String> {
-    // Change this to your server's IP address
-    let server_address = env::var("SERVER_IP").expect("Expect a server IP");
-    let timeout = Duration::from_secs(10);
+    // Define bot options
+    let options = poise::FrameworkOptions {
+        commands: vec![commands::server_status()],
+        on_error: |error| Box::pin(on_error(error)),
+        pre_command: |ctx| {
+            Box::pin(async move {
+                println!("Executing command {}...", ctx.command().qualified_name);
+            })
+        },
+        post_command: |ctx| {
+            Box::pin(async move {
+                println!("Executed command {}!", ctx.command().qualified_name);
+            })
+        },
+        ..Default::default()
+    };
 
-    // Run the blocking operation in a separate thread
-    let result = task::spawn_blocking(move || get_status(&server_address, timeout)).await;
+    // Set up the bot framework
+    let framework = poise::Framework::builder()
+        .setup(move |ctx, ready, framework| {
+            Box::pin(async move {
+                println!("Logged in as {}", ready.user.name);
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                let ctx_clone = ctx.clone();
+                tokio::spawn(async move {
+                    update_bot_status(&ctx_clone).await;
+                });
+                Ok(Data {
+                    votes: Mutex::new(HashMap::new()),
+                })
+            })
+        })
+        .options(options)
+        .build();
 
-    match result {
-        Ok(Ok((latency, status))) => Some(format!(
-            "✅ {} players online (latency: {} ms)",
-            status.players.online, latency
-        )),
-        Ok(Err(_)) => Some(format!("❌ Server currently closed")),
-        Err(e) => {
-            println!("Error in task: {:?}", e);
-            None
-        }
-    }
+    // Get the bot token from the environment
+    let token = env::var("DISCORD_TOKEN")
+        .expect("Missing `DISCORD_TOKEN` environment variable. Please set it.");
+    let _server_ip = env::var("SERVER_IP")
+        .expect("Missing `SERVER_IP` environment variable. Please set it.    ");
+
+    // Define the bot's gateway intents
+    let intents = serenity::GatewayIntents::non_privileged();
+
+    // Create and start the Discord client
+    let mut client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await
+        .expect("Failed to create Discord client");
+
+    client.start().await.expect("Failed to start bot");
 }
