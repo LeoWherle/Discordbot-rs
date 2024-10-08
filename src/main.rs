@@ -2,13 +2,11 @@
 
 mod commands;
 
-use ::serenity::all::ActivityData;
 use dotenv::dotenv;
 use poise::serenity_prelude as serenity;
-use std::{collections::HashMap, env, sync::Mutex, time::Duration};
+use std::{collections::HashMap, env, sync::Mutex};
 
-use commands::get_minecraft_server_status;
-
+use crate::commands::update_bot_status;
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -29,26 +27,6 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
                 println!("Error while handling error: {}", e);
             }
         }
-    }
-}
-
-async fn update_bot_status(ctx: &serenity::Context) {
-    loop {
-        let status_message = get_minecraft_server_status(Duration::from_secs(10)).await;
-
-        let activity = if let Some(players_status) = status_message {
-            let activity_data = ActivityData {
-                name: players_status,
-                kind: serenity::model::gateway::ActivityType::Playing,
-                url: None,
-                state: None,
-            };
-            Some(activity_data)
-        } else {
-            None
-        };
-        ctx.set_activity(activity);
-        tokio::time::sleep(Duration::from_secs(30)).await;
     }
 }
 
