@@ -1,21 +1,31 @@
 use crate::{Context, Error};
 use ::serenity::all::ActivityData;
 use mcping::get_status;
-use poise::serenity_prelude as serenity;
+use poise::{serenity_prelude as serenity, CreateReply};
 use std::{env, time::Duration};
 use tokio::task;
 
 #[poise::command(slash_command)]
 pub async fn server_status(ctx: Context<'_>) -> Result<(), Error> {
     // Acknowledge the interaction immediately
-    ctx.defer().await?;
+    ctx.defer_ephemeral().await?;
 
     match get_minecraft_server_status_with_players(Duration::from_millis(2500)).await {
         Some(response) => {
-            ctx.say(response).await?;
+            ctx.send(CreateReply::default().content(response).ephemeral(true))
+                .await?;
         }
         None => {
-            ctx.say("❌ Failed to retrieve server status").await?;
+            // not ephemeral
+            // ctx.say("❌ Failed to retrieve server status").await?;
+
+            // ephemeral
+            ctx.send(
+                CreateReply::default()
+                    .content("❌ Failed to retrieve server status")
+                    .ephemeral(true),
+            )
+            .await?;
         }
     }
 
