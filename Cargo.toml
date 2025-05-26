@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serenity = "0.12.2"
+serenity = "0.12.4"
 tokio = { version = "1", features = ["full"] }
 mcquery = "1.1.1" # For querying Minecraft server
 dotenv = "0.15"   # For managing environment variables (optional, for your token)
