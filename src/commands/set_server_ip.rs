@@ -13,11 +13,18 @@ pub async fn set_server_ip(
             return Ok(());
         }
     };
-    ctx.data()
-        .server_ips
-        .lock()
-        .await
-        .insert(guild_id, ip.clone());
+    {
+        let mut data = ctx.data().server_ips.lock().await;
+        data.insert(guild_id, ip.clone());
+        // drop the lock
+    }
+
+    ctx.data().db_handler.set_ip(guild_id, ip.clone()).await.map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to set server IP: {}", e),
+        )
+    })?;
     ctx.say(format!("Server IP set to `{}` for this server.", ip))
         .await?;
     Ok(())

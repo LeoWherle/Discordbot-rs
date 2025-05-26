@@ -1,16 +1,18 @@
 [package]
 name = "mc-discord-bot"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 serenity = "0.12.4"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.45", features = ["full"] }
 mcquery = "1.1.1" # For querying Minecraft server
-dotenv = "0.15"   # For managing environment variables (optional, for your token)
+dotenv = "0.15"   # For managing environment variables
 mcping = "0.2.0"
 poise = "0.6.1"
-env_logger = "0.11.5"
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "sqlite"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.release]
 # Enable optimizations for the release build.
